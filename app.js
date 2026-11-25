@@ -37,11 +37,13 @@
     document.querySelector("#admin-entry").hidden = false;
   }
 
-  async function showAdminView() {
+  function showAdminView() {
     studentView.hidden = true;
     adminView.hidden = false;
     document.querySelector("#admin-entry").hidden = true;
-    await loadResults();
+    window.setTimeout(() => {
+      void loadResults();
+    }, 0);
   }
 
   async function loadResults() {
@@ -99,17 +101,17 @@
       });
       showMessage(studentMessage, "");
 
-      const { error } = await client.from("votes").insert({ rating: button.dataset.rating });
-      if (error) {
+      try {
+        const { error } = await client.from("votes").insert({ rating: button.dataset.rating });
+        if (error) throw error;
+        showMessage(studentMessage, "투표가 완료되었습니다. 감사합니다.");
+      } catch (error) {
         console.error("Could not save vote:", error);
         showMessage(studentMessage, "투표를 저장하지 못했습니다. 다시 시도해 주세요.", true);
         ratingButtons.forEach((ratingButton) => {
           ratingButton.disabled = false;
         });
-        return;
       }
-
-      showMessage(studentMessage, "투표가 완료되었습니다. 감사합니다.");
     });
   });
 
@@ -133,19 +135,19 @@
     showMessage(loginMessage, "");
     const formData = new FormData(loginForm);
 
-    const { error } = await client.auth.signInWithPassword({
-      email: formData.get("email"),
-      password: formData.get("password"),
-    });
-
-    loginSubmit.disabled = false;
-    if (error) {
+    try {
+      const { error } = await client.auth.signInWithPassword({
+        email: formData.get("email"),
+        password: formData.get("password"),
+      });
+      if (error) throw error;
+      loginDialog.close();
+    } catch (error) {
       console.error("Admin login failed:", error);
       showMessage(loginMessage, "로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.", true);
-      return;
+    } finally {
+      loginSubmit.disabled = false;
     }
-
-    loginDialog.close();
   });
 
   refreshButton.addEventListener("click", loadResults);
@@ -156,22 +158,24 @@
 
     resetButton.disabled = true;
     showMessage(adminMessage, "");
-    const { error } = await client.from("votes").delete().gt("id", 0);
-    resetButton.disabled = false;
-
-    if (error) {
+    try {
+      const { error } = await client.from("votes").delete().gt("id", 0);
+      if (error) throw error;
+      renderResults([]);
+      showMessage(adminMessage, "모든 투표 결과를 초기화했습니다.");
+    } catch (error) {
       console.error("Could not reset vote results:", error);
       showMessage(adminMessage, "투표 결과를 초기화하지 못했습니다. 다시 시도해 주세요.", true);
-      return;
+    } finally {
+      resetButton.disabled = false;
     }
-
-    renderResults([]);
-    showMessage(adminMessage, "모든 투표 결과를 초기화했습니다.");
   });
 
   document.querySelector("#logout").addEventListener("click", async () => {
-    const { error } = await client.auth.signOut();
-    if (error) {
+    try {
+      const { error } = await client.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
       console.error("Admin logout failed:", error);
       showMessage(adminMessage, "로그아웃하지 못했습니다. 다시 시도해 주세요.", true);
     }
@@ -179,17 +183,9 @@
 
   client.auth.onAuthStateChange((_event, session) => {
     if (session) {
-      void showAdminView();
+      showAdminView();
     } else {
       showStudentView();
     }
-  });
-
-  client.auth.getSession().then(({ data, error }) => {
-    if (error) {
-      console.error("Could not check the current session:", error);
-      return;
-    }
-    if (data.session) void showAdminView();
   });
 })();
